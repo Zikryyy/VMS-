@@ -25,7 +25,7 @@ const options = {
 const swaggerSpec = swaggerJsdoc(options);
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 var hashed;
 
 app.use(express.json())
