@@ -36,7 +36,7 @@ const options = {
 const swaggerSpec = swaggerJsdoc(options);
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 var hashed;
 
 app.use(express.json())
@@ -771,7 +771,7 @@ app.post('/visitor/logout', async function(req, res){
 });
 
 app.get('/', (req, res)=>{
-    res.send("Testing deployment from zaidzaihan.azurewebsites.net");
+    res.send("Testing deployment from zikryy.azurewebsites.net");
 });
 
 
