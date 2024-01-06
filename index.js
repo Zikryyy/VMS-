@@ -209,7 +209,7 @@ async function updateVisitor(host, identification_No, name, gender, ethnicity, t
   async function createSecurityPersonnel(res, identification_No, name, password, role) {
     try {
         await client.connect();
-        const exist = await client.db("VMS").collection("UserInfo").findOne({ identification_No });
+        const exist = await client.db("VMS").collection("Security").findOne({ identification_No });
 
         if (exist) {
             // Security personnel with the provided identification number already exists
