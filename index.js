@@ -33,10 +33,10 @@ const options = {
             bearerAuth: []
         }],
         tags: [
-            { name: 'Admin', description: 'Operations related to admin' },
-            { name: 'Security', description: 'Operations related to security' },
-            { name: 'Staff', description: 'Operations related to staff' },
-            { name: 'Visitors', description: 'Operations related to visitors' }
+            { name: 'Admin', description: 'Only for admin operations' },
+            { name: 'Security', description: 'Only for security operations' },
+            { name: 'Staff', description: 'Only for staff operations' },
+            { name: 'Visitors', description: 'Only for visitors operations' }
         ]
     },
     apis: ['./index.js'],
