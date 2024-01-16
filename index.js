@@ -3,7 +3,7 @@ const uri = "mongodb://zikry:J07k2rHmxnU5Y9CM@ac-zt9huex-shard-00-00.55dttni.mon
 const client = new MongoClient(uri);
 
 var jwt = require('jsonwebtoken');
-const privatekey = "kucingterbang";
+const privatekey = "kucingterbanggg";
 var token;
 
 const express = require('express');
