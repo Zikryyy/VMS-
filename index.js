@@ -3,7 +3,7 @@ const uri = "mongodb://zikry:J07k2rHmxnU5Y9CM@ac-zt9huex-shard-00-00.55dttni.mon
 const client = new MongoClient(uri);
 
 var jwt = require('jsonwebtoken');
-const privatekey = "kucingterbanggg";
+const privatekey = "helloworld";
 var token;
 
 const express = require('express');
@@ -20,18 +20,28 @@ const options = {
             title: 'VMS API',
             version: '1.0.0'
         },
-        components: {  // Add 'components' section
-            securitySchemes: {  // Define 'securitySchemes'
-                bearerAuth: {  // Define 'bearerAuth'
+        components: {
+            securitySchemes: {
+                bearerAuth: {
                     type: 'http',
                     scheme: 'bearer',
                     bearerFormat: 'JWT'
                 }
             }
-        }
+        },
+        security: [{
+            bearerAuth: []
+        }],
+        tags: [
+            { name: 'Admin', description: 'Operations related to admin' },
+            { name: 'Security', description: 'Operations related to security' },
+            { name: 'Staff', description: 'Operations related to staff' },
+            { name: 'Visitors', description: 'Operations related to visitors' }
+        ]
     },
     apis: ['./index.js'],
 };
+
 
 const swaggerSpec = swaggerJsdoc(options);
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
@@ -48,24 +58,34 @@ async function generateHash(password) {
     return hashedPassword;
 }
 
-async function registerStaff(identification_No, name, hashedPassword,phone_number, role) {
-    // Perform operations to register a new staff in the database
-    // Example: Inserting the staff data into the database
+async function registerStaff(identification_No, name, hashedPassword, phone_number) {
     const insertedStaff = await client.db("VMS").collection("UserInfo").insertOne({
         identification_No,
         name,
         password: hashedPassword,
         phone_number,
-        role
+        role: "Staff"
     });
     return insertedStaff;
+}
+
+async function registerAdmin(identification_No, name, hashedPassword, phone_number) {
+    const insertedAdmin = await client.db("VMS").collection("UserInfo").insertOne({
+        identification_No,
+        name,
+        password: hashedPassword,
+        phone_number,
+        role: "Admin"
+    });
+    return insertedAdmin;
 }
 
 // register a visitor 
 async function register(host, identification_No, name, gender, ethnicity, temperature, dateofbirth, citizenship, document_type, expiryDate, address, town, postcode, state, country, phone_number, vehicle_number, vehicle_type, visitor_category, preregistered_pass, no_of_visitors, purpose_of_visit, visit_limit_hrs, visit_limit_min, To_meet, Host_Information, Location_or_department, Unit_no, Location_Information, Permit_number, Delivery_Order, Remarks, fever, sore_throat, dry_cough, runny_nose, shortness_of_breath, body_ache, travelled_oversea_last_14_days, contact_with_person_with_Covid_19, recovered_from_covid_19, covid_19_test, date, hostContact){
     await client.connect();
     const exist = await client.db("VMS").collection("Visitors").findOne({identification_No: identification_No});
-    const host_contact = await client.db("VMS").collection("User_Info").findOne(host);
+    const host_contact = await client.db("VMS").collection("UserInfo").findOne({ identification_No: host });
+    const host_number =  await host_contact.phone_number;
     //hashed = await bcrypt.hash(password,10);
     if(exist){
         console.log("User is already registered!");
@@ -102,7 +122,7 @@ async function register(host, identification_No, name, gender, ethnicity, temper
             Permit_number: Permit_number,
             Delivery_Order: Delivery_Order, 
             Remarks: Remarks,
-            hostContact: host_contact.phone_number
+            hostContact: host_number
 
         });
         await client.db("VMS").collection("Health Status").insertOne({
@@ -133,7 +153,7 @@ async function updateVisitor(host, identification_No, name, gender, ethnicity, t
       // Connect to the MongoDB server
       await client.connect();
       console.log('Connected to the MongoDB server');
-      const host_number = await client.db("VMS").collection("User_Info").findOne(host);
+      const host_number = await client.db("VMS").collection("UserInfo").findOne(host);
       const exist = await client.db("VMS").collection("Visitors").findOne({ identification_No: identification_No });
       if (exist) {
         await client.db("VMS").collection("Visitors").updateOne(
@@ -206,27 +226,23 @@ async function updateVisitor(host, identification_No, name, gender, ethnicity, t
     }
   }
 
-  async function createSecurityPersonnel(res, identification_No, name, password, role) {
+  async function createSecurityPersonnel(res, identification_No, name, password) {
     try {
         await client.connect();
-        const exist = await client.db("VMS").collection("Security").findOne({ identification_No });
+        const exist = await client.db("VMS").collection("UserInfo").findOne({ identification_No });
 
         if (exist) {
-            // Security personnel with the provided identification number already exists
             res.status(400).send({ error: "Identification number already exists" });
         } else {
-            // Create the new security personnel
             const newSecurityPersonnel = {
                 identification_No,
                 name,
                 password,
-                role
+                role: "Security"
             };
 
-            // Add logic to insert new security personnel to the database
             const result = await client.db("VMS").collection("UserInfo").insertOne(newSecurityPersonnel);
-
-            if (result.insertedCount === 1) {
+            if (result) {
                 res.status(200).send({ message: "Security personnel registered successfully" });
             } else {
                 res.status(500).send({ error: "Registration failed" });
@@ -262,21 +278,25 @@ async function logs(identification_No, name, role) {
 
     
 //login for staff
-async function login(res, identification, hashedPassword) {
-    await client.connect();
+async function login(res, identification, password) {
     try {
+        await client.connect();
         const exist = await client.db("VMS").collection("UserInfo").findOne({ identification_No: identification });
         if (exist) {
-            const passwordMatch = await bcrypt.compare(exist.password, hashedPassword);
+            const passwordMatch = await bcrypt.compare(password, exist.password);
             if (passwordMatch) {
                 logs(identification, exist.name, exist.role);
                 const token = jwt.sign({ identification_No: identification, role: exist.role }, privatekey);
-                res.send("Token: " + token);
 
                 // Check if the role is admin and dump all staff data
-                if (exist.role === 'admin') {
+                if (exist.role === 'Admin') {
                     const allStaffData = await client.db("VMS").collection("UserInfo").find({}).toArray();
-                    res.send("All Staff Data: " + JSON.stringify(allStaffData));
+                    res.send({
+                        Token: token,
+                        "All Staff Data": allStaffData
+                    });
+                } else {
+                    res.send("Token: " + token);
                 }
             } else {
                 res.status(401).send("Wrong password!");
@@ -465,7 +485,7 @@ app.post('/user/registerVisitor', async function(req, res){
         try {
             const host = decoded.identification_No
 
-            await register(host,identification_No, name, gender, ethnicity, temperature, dateofbirth, citizenship, document_type, expiryDate, address, town, postcode, state, country, phone_number, vehicle_number, vehicle_type, visitor_category, preregistered_pass, no_of_visitors, purpose_of_visit, visit_limit_hrs, visit_limit_min, To_meet, Host_Information, Location_or_department, Unit_no, Location_Information, Permit_number, Delivery_Order, Remarks, fever, sore_throat, dry_cough, runny_nose, shortness_of_breath, body_ache, travelled_oversea_last_14_days, contact_with_person_with_Covid_19, recovered_from_covid_19, covid_19_test, date);
+            await register(host, identification_No, name, gender, ethnicity, temperature, dateofbirth, citizenship, document_type, expiryDate, address, town, postcode, state, country, phone_number, vehicle_number, vehicle_type, visitor_category, preregistered_pass, no_of_visitors, purpose_of_visit, visit_limit_hrs, visit_limit_min, To_meet, Host_Information, Location_or_department, Unit_no, Location_Information, Permit_number, Delivery_Order, Remarks, fever, sore_throat, dry_cough, runny_nose, shortness_of_breath, body_ache, travelled_oversea_last_14_days, contact_with_person_with_Covid_19, recovered_from_covid_19, covid_19_test, date);
             res.send("Registered visitor successfully!");
         } catch (error) {
             console.error(error);
@@ -498,8 +518,6 @@ app.post('/user/registerVisitor', async function(req, res){
  *                 type: string
  *               password:
  *                 type: string
- *               role:
- *                 type: string
  *     responses:
  *       '200':
  *         description: Security personnel registered successfully
@@ -512,7 +530,7 @@ app.post('/user/registerVisitor', async function(req, res){
  *                   type: string
  *                   description: Success message
  *       '400':
- *         description: Identification number already exists
+ *         description: Identification number already exists or bad request
  *         content:
  *           application/json:
  *             schema:
@@ -520,9 +538,9 @@ app.post('/user/registerVisitor', async function(req, res){
  *               properties:
  *                 error:
  *                   type: string
- *                   description: Error message for existing identification number
+ *                   description: Error message for existing identification number or bad request
  *       '500':
- *         description: Registration failed
+ *         description: Registration failed or internal server error
  *         content:
  *           application/json:
  *             schema:
@@ -530,90 +548,91 @@ app.post('/user/registerVisitor', async function(req, res){
  *               properties:
  *                 error:
  *                   type: string
- *                   description: Error message for registration failure
+ *                   description: Error message for registration failure or internal server error
  */
+
 app.post('/security/register', async function(req, res){
-    const { identification_No, name, password, role } = req.body;
+    const { identification_No, name, password } = req.body;
     const hashedPassword = await generateHash(password);
 
-    await createSecurityPersonnel(res,identification_No, name, password, role);
+    await createSecurityPersonnel(res,identification_No, name, hashedPassword);
 });
 
 /**
  * @swagger
- * /api/user/register:
+ * /user/register:
  *   post:
  *     summary: Register a new staff member
- *     consumes:
- *       - application/json
- *     produces:
- *       - application/json
- *     parameters:
- *       - in: body
- *         name: staffDetails
- *         description: Staff details for registration
- *         required: true
- *         schema:
- *           type: object
- *           properties:
- *             identification_No:
- *               type: string
- *               description: Unique identification number for the staff
- *             name:
- *               type: string
- *               description: Name of the staff
- *             password:
- *               type: string
- *               description: Staff password
- *             phone_number:
- *               type: string
- *               description: Staff phone number
- *             role:
- *               type: string
- *               description: Role of the staff
+ *     description: Register a new staff member with identification number, name, password, and phone number.
+ *     tags:
+ *       - Security
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               identification_No:
+ *                 type: string
+ *               name:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *               phone_number:
+ *                 type: string
  *     responses:
  *       '200':
  *         description: Staff registered successfully
- *         schema:
- *           type: object
- *           properties:
- *             message:
- *               type: string
- *               description: Success message
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   description: Success message
  *       '400':
- *         description: Staff already exists
- *         schema:
- *           type: object
- *           properties:
- *             error:
- *               type: string
- *               description: Error message for existing staff
+ *         description: Staff already exists or bad request
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   description: Error message for existing staff or bad request
  *       '403':
  *         description: Unauthorized access
- *         schema:
- *           type: object
- *           properties:
- *             error:
- *               type: string
- *               description: Error message for unauthorized access
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   description: Unauthorized access error message
  *       '500':
  *         description: Failed to register staff or unauthorized access
- *         schema:
- *           type: object
- *           properties:
- *             error:
- *               type: string
- *               description: Error message for failed registration or unauthorized access
- *     tags:
- *       - Security
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   description: Error message for registration failure or unauthorized access
  */
+
 //user to register
 app.post('/user/register', async function(req, res) {
-    const { identification_No, name, password, phone_number, role } = req.body;
-    const hashedPassword = await generateHash(password);
-    const token = req.headers.authorization.split(' ')[1];
-    
     try {
+        const token = req.headers.authorization.split(' ')[1];
+        const { identification_No, name, password, phone_number } = req.body;
+        const hashedPassword = await generateHash(password);
+        
         // Verify the JWT token
         const decodedToken = jwt.verify(token, privatekey);
         
@@ -631,14 +650,17 @@ app.post('/user/register', async function(req, res) {
         }
         
         // Logic to register the new staff
-        const result = await registerStaff(identification_No, name, hashedPassword, phone_number, role);
+        await registerStaff(identification_No, name, hashedPassword, phone_number);
+        
         // Send success response upon successful registration
-        res.status(200).json({ message: 'Staff registered successfully' });
+        return res.status(200).json({ message: 'Staff registered successfully' });
     } catch (error) {
         // Send error response if registration fails or token validation fails
-        res.status(500).json({ error: 'Failed to register staff or unauthorized access' });
+        console.error(error);
+        return res.status(500).json({ error: 'Failed to register staff or unauthorized access' });
     }
 });
+
 
 
 //login post for staff
@@ -650,6 +672,8 @@ app.post('/user/register', async function(req, res) {
  *     description: Login with identification number and password
  *     tags:
  *       - Staff
+ *       - Security
+ *       - Admin
  *     requestBody:
  *       required: true
  *       content:
@@ -675,8 +699,7 @@ app.post('/user/register', async function(req, res) {
  */
 app.post('/user/login', async function(req, res){
     const { identification_No, password } = req.body;
-    const hashedPassword = await generateHash(password);
-    await login(res, identification_No, hashedPassword);
+    await login(res, identification_No, password);
 });
 
 
@@ -689,26 +712,27 @@ app.post('/user/login', async function(req, res){
  *     description: Logout user by updating exit time in logs
  *     tags:
  *       - Staff
+ *       - Security
+ *       - Admin
  *     security:
  *       - bearerAuth: []
- *     requestBody:
- *       required: false
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               token:
- *                 type: string
  *     responses:
  *       '200':
  *         description: User successfully logged out
  *       '400':
- *         description: Invalid request body or user not logged in before
+ *         description: Invalid request or user not logged in before
  */
+const blacklistedTokens = [];
+
 app.post('/user/logout', async function(req, res){
     try {
         const token = req.header('Authorization').split(' ')[1];
+
+        // Check if the token is blacklisted
+        if (blacklistedTokens.includes(token)) {
+            return res.status(401).json({ message: 'User already logged out. Please reauthenticate.' });
+        }
+
         const decodedToken = jwt.verify(token, privatekey);
 
         const currentDate = new Date();
@@ -716,10 +740,17 @@ app.post('/user/logout', async function(req, res){
 
         await client.connect();
         const exist = await client.db("VMS").collection("UserInfo").findOne({ identification_No: decodedToken.identification_No });
-        if(exist){
-            await client.db("VMS").collection("Logs").updateOne({ identification_No: decodedToken.identification_No }, { $set: { exit_time: exitTime, date: currentDate.toLocaleDateString() } });
+        if (exist) {
+            // Update logs with exit time
+            await client.db("VMS").collection("Logs").updateOne(
+                { identification_No: decodedToken.identification_No },
+                { $set: { exit_time: exitTime, date: currentDate.toLocaleDateString() } }
+            );
+
+            // Add the token to the blacklist
+            blacklistedTokens.push(token);
+
             res.send(`Successfully logged out!\nCheck out time: ${exitTime}`);
-            console.log(exist.exit_time);
         } else {
             res.send("User not found!");
         }
@@ -728,6 +759,7 @@ app.post('/user/logout', async function(req, res){
         res.status(500).json({ message: 'An error occurred' });
     }
 });
+
 
 
 //delete visitors
@@ -807,12 +839,14 @@ if(decoded.role == "Admin"|| decoded.role == "Staff"){
  *             properties:
  *               identification_No:
  *                 type: string
+ *                 description: Identification number of the visitor
  *     responses:
  *       '200':
  *         description: Visitor login successful
  *       '401':
  *         description: Invalid credentials or visitor not found
  */
+
 app.post('/visitor/retrievePass', async function(req, res){
     const {identification_No} = req.body;
     visitorLogin(res, identification_No);
@@ -826,7 +860,7 @@ app.post('/visitor/retrievePass', async function(req, res){
  *     summary: "View visitors"
  *     description: "Retrieve visitors based on user role"
  *     tags:
- *       - Staff & Visitors
+ *       - Staff
  *     security:
  *       - bearerAuth: []
  *     responses:
@@ -840,15 +874,10 @@ app.post('/visitor/retrievePass', async function(req, res){
  *       - "application/json"
  *     produces:
  *       - "application/json"
- *   securityDefinitions:
- *     JWT:
- *       type: "apiKey"
- *       name: "Authorization"
- *       in: "header"
  */
 app.post('/user/view/visitor', async function(req, res){
-    var token = req.header('Authorization').split(" ")[1];
     try {
+        var token = req.header('Authorization').split(" ")[1];
         var decoded = jwt.verify(token, privatekey);
         console.log(decoded.role);
         res.send(await viewVisitors(decoded.identification_No, decoded.role));
@@ -895,11 +924,70 @@ app.post('/user/view/visitor', async function(req, res){
  *               expiryDate:
  *                 type: string
  *                 format: date
- *               # Add other properties here...
+ *               address:
+ *                 type: string
+ *               town:
+ *                 type: string
+ *               postcode:
+ *                 type: string
+ *               state:
+ *                 type: string
+ *               country:
+ *                 type: string
+ *               phone_number:
+ *                 type: string
+ *               vehicle_number:
+ *                 type: string
+ *               vehicle_type:
+ *                 type: string
+ *               visitor_category:
+ *                 type: string
+ *               preregistered_pass:
+ *                 type: string
+ *               no_of_visitors:
+ *                 type: integer
+ *               purpose_of_visit:
+ *                 type: string
+ *               visit_limit_hrs:
+ *                 type: integer
+ *               visit_limit_min:
+ *                 type: integer
+ *               To_meet:
+ *                 type: string
+ *               Host_Information:
+ *                 type: string
+ *               Location_or_department:
+ *                 type: string
+ *               Unit_no:
+ *                 type: string
+ *               Location_Information:
+ *                 type: string
+ *               Permit_number:
+ *                 type: string
+ *               Delivery_Order:
+ *                 type: string
+ *               Remarks:
+ *                 type: string
+ *               fever:
+ *                 type: boolean
+ *               sore_throat:
+ *                 type: boolean
+ *               dry_cough:
+ *                 type: boolean
+ *               runny_nose:
+ *                 type: boolean
+ *               shortness_of_breath:
+ *                 type: boolean
+ *               body_ache:
+ *                 type: boolean
+ *               travelled_oversea_last_14_days:
+ *                 type: boolean
+ *               contact_with_person_with_Covid_19:
+ *                 type: boolean
  *               recovered_from_covid_19:
- *                 type: string
+ *                 type: boolean
  *               covid_19_test:
- *                 type: string
+ *                 type: boolean
  *               date:
  *                 type: string
  *                 format: date
@@ -914,12 +1002,8 @@ app.post('/user/view/visitor', async function(req, res){
  *       - "application/json"
  *     produces:
  *       - "application/json"
- *   securityDefinitions:
- *     JWT:
- *       type: "apiKey"
- *       name: "Authorization"
- *       in: "header"
  */
+
 
 app.post('/user/updateVisitor', async function(req, res){
     var token = req.header('Authorization').split(" ")[1];
@@ -929,7 +1013,7 @@ app.post('/user/updateVisitor', async function(req, res){
     if(decoded.role == "Admin" || decoded.role == "Staff"){
         await updateVisitor(identification_No, name, gender, ethnicity, temperature, dateofbirth, citizenship, document_type, expiryDate, address, town, postcode, state, country, phone_number, vehicle_number, vehicle_type, visitor_category, preregistered_pass, no_of_visitors, purpose_of_visit, visit_limit_hrs, visit_limit_min, To_meet, Host_Information, Location_or_department, Unit_no, Location_Information, Permit_number, Delivery_Order, Remarks, fever, sore_throat, dry_cough, runny_nose, shortness_of_breath, body_ache, travelled_oversea_last_14_days, contact_with_person_with_Covid_19, recovered_from_covid_19, covid_19_test, date);
     }else{
-        console.log("No access!");
+        res.send("No access!");
     }
 });
 
@@ -975,15 +1059,16 @@ app.post('/user/view/Logs', async function(req, res){
     }
 })
 
-//Visitor logout
+
+// return pass for visitor
 /**
  * @swagger
  * /visitor/returnPass:
- *   tags:
- *     - Visitors
  *   post:
  *     summary: Track exit time of visitors
- *     description: Update logs for every visitors
+ *     description: Update logs for every visitor
+ *     tags:
+ *       - Visitors
  *     requestBody:
  *       required: true
  *       content:
@@ -999,6 +1084,7 @@ app.post('/user/view/Logs', async function(req, res){
  *       '400': 
  *         description: Invalid request body or user not logged in
  */
+
 app.post('/visitor/returnPass', async function(req, res){
     const {identification_No} = req.body;
     const currentDate = new Date();
@@ -1013,105 +1099,206 @@ app.post('/visitor/returnPass', async function(req, res){
     }
 });
 
+/**
+ * @swagger
+ * /Admin/register:
+ *   post:
+ *     summary: Register a new admin
+ *     description: Register a new admin with identification number, name, password, and phone number.
+ *     tags:
+ *       - Admin
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               identification_No:
+ *                 type: string
+ *               name:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *               phone_number:
+ *                 type: string
+ *     responses:
+ *       '200':
+ *         description: Admin registered successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   description: Success message
+ *       '400':
+ *         description: Admin already exists
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   description: Error message for existing admin
+ *       '500':
+ *         description: Failed to register admin
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   description: Error message for registration failure
+ */
+app.post('/Admin/register', async function(req, res){
+    const { identification_No, name, password, phone_number } = req.body;
+    const hashedPassword = await generateHash(password); // Encrypting the password
+    try {
+        await client.connect();
+        const existingAdmin = await client.db("VMS").collection("UserInfo").findOne({ identification_No });
+        if (existingAdmin) {
+            return res.status(400).json({ error: 'Admin already exists' });
+        }
+        await registerAdmin(identification_No, name, hashedPassword, phone_number);
+        res.status(200).json({ message: 'Admin registered successfully' });
+    } catch (error) {
+        // Send error response if registration fails
+        res.status(500).json({ error: 'Failed to register admin' });
+    }
+});
 
 //Additional API
 /**
- * @swagger
- * /Admin/manage-roles/{userId}:
- *   put:
- *     summary: Update user role by authenticated administrator
- *     consumes:
- *       - application/json
- *     produces:
- *       - application/json
- *     parameters:
- *       - in: path
- *         name: userId
- *         description: ID of the user to update role
- *         required: true
- *         type: string
- *       - in: header
- *         name: Authorization
- *         description: Access token
- *         required: true
- *         type: string
- *       - in: body
- *         name: userRole
- *         description: User role information for update
- *         required: true
- *         schema:
- *           type: object
- *           properties:
- *             role:
- *               type: string
- *               description: New role to be assigned to the user
- *     responses:
- *       '200':
- *         description: Account role updated successfully
- *         schema:
- *           type: object
- *           properties:
- *             message:
- *               type: string
- *               description: Success message
- *             updatedUser:
- *               type: object
- *               description: Updated user information
- *       '403':
- *         description: Unauthorized access
- *         schema:
- *           type: object
- *           properties:
- *             error:
- *               type: string
- *               description: Error message for unauthorized access
- *       '404':
- *         description: User not found
- *         schema:
- *           type: object
- *           properties:
- *             error:
- *               type: string
- *               description: Error message for user not found
- *       '500':
- *         description: Failed to update account role or unauthorized access
- *         schema:
- *           type: object
- *           properties:
- *             error:
- *               type: string
- *               description: Error message for failed update or unauthorized access
- *     tags:
- *       - Admin
- */
+* @swagger
+* /Admin/manage-roles/{userId}:
+*   put:
+*     summary: Update user role by authenticated administrator
+*     description: Update user role based on the provided user ID for an authenticated administrator
+*     tags:
+*       - Admin
+*     security:
+*       - bearerAuth: []  # Assuming you're using bearer token authentication
+*     parameters:
+*       - in: path
+*         name: userId
+*         description: ID of the user to update role
+*         required: true
+*         schema:
+*           type: string
+*       - in: body
+*         name: userRole
+*         description: User role information for update
+*         required: true
+*         schema:
+*           type: object
+*           properties:
+*             role:
+*               type: string
+*               description: New role to be assigned to the user
+*     responses:
+*       '200':
+*         description: Account role updated successfully
+*         content:
+*           application/json:
+*             schema:
+*               type: object
+*               properties:
+*                 message:
+*                   type: string
+*                   description: Success message
+*                 updatedUser:
+*                   type: object
+*                   description: Updated user information (excluding sensitive fields)
+*       '401':  # Unauthorized (more specific than 403)
+*         description: Unauthorized access
+*         content:
+*           application/json:
+*             schema:
+*               type: object
+*               properties:
+*                 error:
+*                   type: string
+*                   description: Error message for unauthorized access
+*       '403':  # Forbidden (if applicable)
+*         description: Forbidden access
+*         content:
+*           application/json:
+*             schema:
+*               type: object
+*               properties:
+*                 error:
+*                   type: string
+*                   description: Error message for forbidden access
+*       '404':
+*         description: User not found
+*         content:
+*           application/json:
+*             schema:
+*               type: object
+*               properties:
+*                 error:
+*                   type: string
+*                   description: Error message for user not found
+*       '500':
+*         description: Failed to update account role
+*         content:
+*           application/json:
+*             schema:
+*               type: object
+*               properties:
+*                 error:
+*                   type: string
+*                   description: Error message for failed update
+*     consumes:
+*       - application/json
+*     produces:
+*       - application/json
+*/
 
 app.put('/Admin/manage-roles/:userId', async function(req, res) {
-    const { userId } = req.params;
-    const { role } = req.body;
-    const token = req.headers.authorization.split(' ')[1];
     try {
-        const decodedToken = jwt.verify(token, privatekey);
-
-        if (decodedToken.role !== 'admin') {
-            return res.status(403).json({ error: 'Unauthorized access' });
-        }
-
-        await client.connect();
-        const updatedUser = await client.db("VMS").collection("UserInfo").findOneAndUpdate(
-            { _id: ObjectId(userId) },
-            { $set: { role } },
-            { returnOriginal: false }
+      await client.connect();
+  
+      const { userId } = req.params;
+      const { role } =  await req.body;
+      const token = req.headers.authorization.split(' ')[1];
+  
+      const decodedToken = jwt.verify(token, privatekey);
+  
+      if (decodedToken.role !== 'Admin') {
+        return res.status(403).json({ error: 'Unauthorized access' });
+      }
+  
+      const userToUpdate = await client.db("VMS").collection("UserInfo").findOne({ identification_No: userId });
+  
+      if (userToUpdate) {
+        const updatedUser = await client.db("VMS").collection("UserInfo").updateOne(
+          { identification_No: userId },
+          { $set: { role: role } }
         );
-
-        if (updatedUser.value) {
-            res.status(200).json({ message: 'Account role updated successfully', updatedUser });
+  
+        if (updatedUser.matchedCount > 0) {
+          res.status(200).json({ message: 'Account role updated successfully',
+          updatedUser
+        });
         } else {
-            res.status(404).json({ error: 'User not found' });
+          res.status(500).json({ error: 'Failed to update user role' });
         }
+      } else {
+        res.status(404).json({ error: 'User not found' });
+      }
     } catch (error) {
-        res.status(500).json({ error: 'Failed to update account role or unauthorized access' });
+      console.error(error);
+      res.status(500).json({ error: 'Failed to update account role or unauthorized access' });
+    } finally {
+      await client.close();
     }
-});
+  });
+
 
 // Endpoint for authenticated security to retrieve host contact number from visitor pass
 /**
@@ -1127,11 +1314,6 @@ app.put('/Admin/manage-roles/:userId', async function(req, res) {
  *       - in: path
  *         name: identification_No
  *         description: Identification number from the visitor pass
- *         required: true
- *         type: string
- *       - in: header
- *         name: Authorization
- *         description: Access token
  *         required: true
  *         type: string
  *     responses:
@@ -1169,6 +1351,8 @@ app.put('/Admin/manage-roles/:userId', async function(req, res) {
  *               description: Error message for failed retrieval or unauthorized access
  *     tags:
  *       - Security
+ *     security:
+ *       - bearerAuth: []
  */
 
 app.get('/security/visitor-pass/:identification_No/host-contact', async function(req, res) {
@@ -1184,7 +1368,7 @@ app.get('/security/visitor-pass/:identification_No/host-contact', async function
 
         // Logic to retrieve host's contact number from the visitor pass
         await client.connect();
-        const visitorPass = await client.db("VMS").collection("").findOne({ identification_No });
+        const visitorPass = await client.db("VMS").collection("Visitors").findOne({ identification_No });
 
         if (visitorPass && visitorPass.hostContact) {
             res.status(200).json({ hostContact: visitorPass.hostContact });
@@ -1201,11 +1385,11 @@ app.get('/security/visitor-pass/:identification_No/host-contact', async function
 
 
 app.get('/', (req, res)=>{
-    res.send("Testing deployment from zikryy.azurewebsites.net/");
+    res.send("Testing deployment from zikryy.azurewebsites.net");
 });
 
 
 
 app.listen(port, () => {
     console.log(`Server listening at port ${port}`)
-});
+  });
