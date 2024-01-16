@@ -1201,11 +1201,11 @@ app.get('/security/visitor-pass/:identification_No/host-contact', async function
 
 
 app.get('/', (req, res)=>{
-    res.send("Testing deployment from "zikryy.azurewebsites.net/);
+    res.send("Testing deployment from zikryy.azurewebsites.net/");
 });
 
 
 
 app.listen(port, () => {
     console.log(`Server listening at port ${port}`)
-  });
+});
