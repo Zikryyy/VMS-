@@ -1,5 +1,5 @@
 const {MongoClient} = require('mongodb');
-const uri = "mongodb+srv://zikry:J07k2rHmxnU5Y9CM@cluster0.55dttni.mongodb.net/";
+const uri = "mongodb://zikry:J07k2rHmxnU5Y9CM@ac-zt9huex-shard-00-00.55dttni.mongodb.net:27017,ac-zt9huex-shard-00-01.55dttni.mongodb.net:27017,ac-zt9huex-shard-00-02.55dttni.mongodb.net:27017/?ssl=true&replicaSet=atlas-v8zu1w-shard-0&authSource=admin&retryWrites=true&w=majority";
 const client = new MongoClient(uri);
 
 var jwt = require('jsonwebtoken');
